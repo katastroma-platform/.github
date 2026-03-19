@@ -17,8 +17,8 @@ monolith. Katastroma separates them at every natural boundary.
 
 ### The Pipeline
 
-External event → [epibathra](#epibathra) receives intent → [pedalion](#pedalion)
-reconciles → [resolver](#keleustēs) determines what →
+External event → [grammateus](#grammateus) receives intent →
+[pedalion](#pedalion) reconciles → [resolver](#keleustēs) determines what →
 [provisioner](#katartismos) executes how.
 
 No polling. Event-driven end to end.
@@ -27,13 +27,24 @@ No polling. Event-driven end to end.
 
 | Component                   | Role                                          |
 | --------------------------- | --------------------------------------------- |
+| [oiax](#oiax)               | Platform bootstrap and teardown CLI           |
 | [tropis](#tropis)           | CRD type definitions — the backbone           |
-| [epibathra](#epibathra)     | Tenant manager — receives external intent     |
-| [pedalion](#pedalion)       | Reconciler — steers and orchestrates          |
+| [epibathra](#epibathra)     | Tenant management chart — composes components |
+| [grammateus](#grammateus)   | API server — receives intent, manages tenants |
+| [prora](#prora)             | Self-service frontend                         |
+| [pedalion](#pedalion)       | Reconciler — watches and delegates            |
 | [keleustēs](#keleustēs)     | Resolver interface — what should exist?       |
 | [katartismos](#katartismos) | Provisioner interface — how do we apply them? |
 | [orpheus](#orpheus)         | Reference resolver implementation             |
 | [histia](#histia)           | Reference provisioner implementation          |
+
+## Oiax
+
+Platform bootstrap and teardown CLI. Installs CRDs, waits for them to establish,
+creates the root Application, and deploys pedalion. Reverses all of that on
+teardown. Runs locally using the user's kubeconfig.
+
+[katastroma/oiax](https://github.com/katastroma/oiax)
 
 ## Tropis
 
@@ -43,19 +54,31 @@ Kubernetes CRD type definitions and generated API machinery.
 
 ## Epibathra
 
-Platform API for tenant management and event entrypoint. Provisions tenants and
-their namespaces, creates Application and RepoCredential resources on their
-behalf, and exposes an API for tenant self-service. Receives webhooks from
-tenant repos — this is the external signal that enters the platform.
+Helm chart that composes the tenant management stack. Deploys grammateus, prora,
+and off-the-shelf components (auth/IdP, gatekeeper) as dependencies. No source
+code of its own.
 
-[katastroma/epibathra](https://github.com/katastroma/epibathra)
+[katastroma/phortion/epibathra](https://github.com/katastroma/phortion/tree/default/epibathra)
+
+## Grammateus
+
+API server. Manages tenant namespaces and attaches Applications and
+RepoCredentials to them. Receives webhooks from tenant repositories. This is the
+external signal that enters the platform.
+
+[katastroma/grammateus](https://github.com/katastroma/grammateus)
+
+## Prora
+
+Tenant self-service frontend. Consumes the grammateus API.
+
+[katastroma/prora](https://github.com/katastroma/prora)
 
 ## Pedalion
 
-Reconciler and orchestrator. Watches Application resources in the cluster and
-drives the reconcile loop. Does not resolve sources or provision resources
-itself — it delegates to a resolver to determine what should exist and a
-provisioner to execute.
+Application operator. Watches Application resources in the cluster and drives
+the reconcile loop. Delegates to a resolver to determine what should exist and a
+provisioner to make it so.
 
 [katastroma/pedalion](https://github.com/katastroma/pedalion)
 
