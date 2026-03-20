@@ -32,6 +32,7 @@ No polling. Event-driven end to end.
 | [epibathra](#epibathra)     | Tenant management chart — composes components |
 | [grammateus](#grammateus)   | API server — receives intent, manages tenants |
 | [prora](#prora)             | Self-service frontend                         |
+| [prymna](#prymna)           | Platform runtime chart — pedalion + adapter   |
 | [pedalion](#pedalion)       | Reconciler — watches and delegates            |
 | [zeugma](#zeugma)           | Adapter service contract (gRPC)               |
 | [ergata](#ergata)           | Adapter implementations                       |
@@ -75,6 +76,13 @@ external signal that enters the platform.
 Tenant self-service frontend. Consumes the grammateus API.
 
 [katastroma/prora](https://github.com/katastroma/prora)
+
+## Prymna
+
+Helm chart that deploys the platform runtime — pedalion and the adapter service.
+The adapter image is configurable.
+
+[katastroma/phortion/prymna](https://github.com/katastroma/phortion/tree/default/prymna)
 
 ## Pedalion
 
