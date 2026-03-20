@@ -18,8 +18,8 @@ monolith. Katastroma separates them at every natural boundary.
 ### The Pipeline
 
 External event → [grammateus](#grammateus) receives intent →
-[pedalion](#pedalion) reconciles → [resolver](#keleustēs) determines what →
-[provisioner](#katartismos) executes how.
+[pedalion](#pedalion) reconciles → [adapter](#zeugma) retrieves, renders, and
+provisions.
 
 No polling. Event-driven end to end.
 
@@ -33,9 +33,11 @@ No polling. Event-driven end to end.
 | [grammateus](#grammateus)   | API server — receives intent, manages tenants |
 | [prora](#prora)             | Self-service frontend                         |
 | [pedalion](#pedalion)       | Reconciler — watches and delegates            |
-| [keleustēs](#keleustēs)     | Resolver interface — what should exist?       |
+| [zeugma](#zeugma)           | Adapter service contract (gRPC)               |
+| [ergata](#ergata)           | Adapter implementations                       |
+| [keleustēs](#keleustēs)     | Resolution interfaces — what should exist?    |
 | [katartismos](#katartismos) | Provisioner interface — how do we apply them? |
-| [orpheus](#orpheus)         | Reference resolver implementation             |
+| [orpheus](#orpheus)         | Reference resolution implementation           |
 | [histia](#histia)           | Reference provisioner implementation          |
 
 ## Oiax
@@ -77,16 +79,32 @@ Tenant self-service frontend. Consumes the grammateus API.
 ## Pedalion
 
 Application operator. Watches Application resources in the cluster and drives
-the reconcile loop. Delegates to a resolver to determine what should exist and a
-provisioner to make it so.
+the reconcile loop. Delegates to an adapter service for resolution and
+provisioning.
 
 [katastroma/pedalion](https://github.com/katastroma/pedalion)
 
+## Zeugma
+
+Adapter service contract. Defines the gRPC API between pedalion and whichever
+adapter implementation powers it. Pedalion imports the generated client. Adapter
+implementations import the generated server.
+
+[katastroma/zeugma](https://github.com/katastroma/zeugma)
+
+## Ergata
+
+Adapter implementations. Each adapter implements the zeugma gRPC service as a
+standalone image. Includes the native adapter (orpheus + histia) and an ArgoCD
+adapter.
+
+[katastroma/ergata](https://github.com/katastroma/ergata)
+
 ## Keleustēs
 
-Resolver interface. Defines the contract for answering "what resources should
-exist?" One of two fundamental GitOps primitives. Designed for ecosystem
-adoption — any GitOps system can implement it.
+Resolution interfaces. Defines the retriever and renderer contracts for
+answering "what resources should exist?" One of two fundamental GitOps
+primitives. Designed for ecosystem adoption.
 
 [katastroma/keleustes](https://github.com/katastroma/keleustes)
 
@@ -116,10 +134,11 @@ external dependencies, no running services — just the cluster.
 
 ## Swappability
 
-The resolver and provisioner are independently swappable:
+The adapter is a separate deployment, selected by configuration. Swap the image,
+swap the backend:
 
-- Katastroma's resolver with a Flux-based provisioner
-- An ArgoCD-backed provisioner with a custom resolver
-- Both reference implementations for a fully self-contained stack
+- The native adapter (orpheus + histia) for a self-contained stack
+- An ArgoCD adapter that delegates to a running ArgoCD instance
+- Any custom adapter that implements the zeugma gRPC contract
 
 The interfaces are the product. The implementations are reference points.
