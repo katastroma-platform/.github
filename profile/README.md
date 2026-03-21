@@ -1,73 +1,48 @@
-# `katastroma`
+# Katastroma
 
-Open GitOps platform for Kubernetes. Breaks the GitOps problem into its
-fundamental primitives and defines the interfaces between them.
+Multi-tenant GitOps platform for Kubernetes. Webhook-driven, event-based, no
+polling. Tenant isolation through Kubernetes-native RBAC, impersonation, and
+admission control.
 
 ## Architecture
 
-GitOps asks two questions:
+GitOps has three operations:
 
-1. **What resources should exist?** Given a source (a git repo, a branch, a
-   path, and credentials), determine the resource inventory.
-2. **How do we make them exist?** Given a resource inventory, apply it to a
-   cluster.
+1. **Fetch** — given a repo URL, revision, path, and credentials, retrieve the
+   source
+2. **Render** — given source content, produce Kubernetes manifests
+3. **Provision** — given manifests, apply them to the cluster
 
-Most GitOps systems collapse watching, resolving, and provisioning into a single
-monolith. Katastroma separates them at every natural boundary.
+Each operation is a separate service with its own interface, implementation, and
+deployment. A webhook server orchestrates the pipeline.
 
 ### The Pipeline
 
-External event → [grammateus](#grammateus) receives intent →
-[pedalion](#pedalion) reconciles → [adapter](#zeugma) retrieves, renders, and
-provisions.
-
-No polling. Event-driven end to end.
+Git push → [pharos](#pharos) receives webhook → [phortizo](#phortizo) fetches
+source → [orpheus](#orpheus) renders manifests → [histia](#histia) provisions to
+cluster via impersonation.
 
 ### Components
 
-| Component                   | Role                                          |
-| --------------------------- | --------------------------------------------- |
-| [oiax](#oiax)               | Platform bootstrap and teardown CLI           |
-| [tropis](#tropis)           | CRD type definitions — the backbone           |
-| [epibathra](#epibathra)     | Tenant management chart — composes components |
-| [grammateus](#grammateus)   | API server — receives intent, manages tenants |
-| [prora](#prora)             | Self-service frontend                         |
-| [prymna](#prymna)           | Platform runtime chart — pedalion + adapter   |
-| [pedalion](#pedalion)       | Reconciler — watches and delegates            |
-| [zeugma](#zeugma)           | Adapter service contract (gRPC)               |
-| [ergata](#ergata)           | Adapter implementations                       |
-| [keleustēs](#keleustēs)     | Resolution interfaces — what should exist?    |
-| [katartismos](#katartismos) | Provisioner interface — how do we apply them? |
-| [orpheus](#orpheus)         | Reference resolution implementation           |
-| [histia](#histia)           | Reference provisioner implementation          |
-
-## Oiax
-
-Platform bootstrap and teardown CLI. Installs CRDs, waits for them to establish,
-creates the root Application, and deploys pedalion. Reverses all of that on
-teardown. Runs locally using the user's kubeconfig.
-
-[katastroma/oiax](https://github.com/katastroma/oiax)
-
-## Tropis
-
-Kubernetes CRD type definitions and generated API machinery.
-
-[katastroma/tropis](https://github.com/katastroma/tropis)
-
-## Epibathra
-
-Helm chart that composes the tenant management stack. Deploys grammateus, prora,
-and off-the-shelf components (auth/IdP, gatekeeper) as dependencies. No source
-code of its own.
-
-[katastroma/phortion/epibathra](https://github.com/katastroma/phortion/tree/default/epibathra)
+| Component                   | Role                                 |
+| --------------------------- | ------------------------------------ |
+| [grammateus](#grammateus)   | Tenant management API server         |
+| [prora](#prora)             | Tenant self-service frontend         |
+| [pharos](#pharos)           | Webhook server — receives git events |
+| [naukleros](#naukleros)     | Retriever interface (gRPC proto)     |
+| [phortizo](#phortizo)       | Retriever implementation             |
+| [keleustēs](#keleustēs)     | Renderer interface (gRPC proto)      |
+| [orpheus](#orpheus)         | Renderer implementation              |
+| [katartismos](#katartismos) | Provisioner interface (gRPC proto)   |
+| [histia](#histia)           | Provisioner implementation           |
 
 ## Grammateus
 
-API server. Manages tenant namespaces and attaches Applications and
-RepoCredentials to them. Receives webhooks from tenant repositories. This is the
-external signal that enters the platform.
+Tenant management API server. Manages tenant namespaces, hierarchy, service
+accounts, credentials, and resource queries. Handles onboarding, offboarding,
+and webhook signature verification. See
+[grammateus README](https://github.com/katastroma/grammateus) for the full
+multi-tenancy architecture.
 
 [katastroma/grammateus](https://github.com/katastroma/grammateus)
 
@@ -77,76 +52,68 @@ Tenant self-service frontend. Consumes the grammateus API.
 
 [katastroma/prora](https://github.com/katastroma/prora)
 
-## Prymna
+## Pharos
 
-Helm chart that deploys the platform runtime — pedalion and the adapter service.
-The adapter image is configurable.
+Webhook server. Receives git push events, verifies HMAC signatures through
+grammateus, determines if the push affects the tenant's registered revision and
+path, and orchestrates the fetch → render → provision pipeline.
 
-[katastroma/phortion/prymna](https://github.com/katastroma/phortion/tree/default/prymna)
+[katastroma/pharos](https://github.com/katastroma/pharos)
 
-## Pedalion
+## Naukleros
 
-Application operator. Watches Application resources in the cluster and drives
-the reconcile loop. Delegates to an adapter service for resolution and
-provisioning.
+Retriever interface. gRPC proto defining the contract for fetching source
+content given a repo URL, revision, path, and credentials.
 
-[katastroma/pedalion](https://github.com/katastroma/pedalion)
+[katastroma/naukleros](https://github.com/katastroma/naukleros)
 
-## Zeugma
+## Phortizo
 
-Adapter service contract. Defines the gRPC API between pedalion and whichever
-adapter implementation powers it. Pedalion imports the generated client. Adapter
-implementations import the generated server.
+Retriever implementation. Implements the naukleros interface. Fetches source
+using git libraries.
 
-[katastroma/zeugma](https://github.com/katastroma/zeugma)
-
-## Ergata
-
-Adapter implementations. Each adapter implements the zeugma gRPC service as a
-standalone image. Includes the native adapter (orpheus + histia) and an ArgoCD
-adapter.
-
-[katastroma/ergata](https://github.com/katastroma/ergata)
+[katastroma/phortizo](https://github.com/katastroma/phortizo)
 
 ## Keleustēs
 
-Resolution interfaces. Defines the retriever and renderer contracts for
-answering "what resources should exist?" One of two fundamental GitOps
-primitives. Designed for ecosystem adoption.
+Renderer interface. gRPC proto defining the contract for rendering Kubernetes
+manifests from source content.
 
 [katastroma/keleustes](https://github.com/katastroma/keleustes)
 
-## Katartismos
-
-Provisioner interface. Defines the contract for answering "how do we make them
-exist?" The second fundamental GitOps primitive. Designed for ecosystem adoption
-— any GitOps system can implement it.
-
-[katastroma/katartismos](https://github.com/katastroma/katartismos)
-
 ## Orpheus
 
-Katastroma's reference resolver. Implements the keleustēs interface. Given a
-source repository and credentials, clones, renders, and produces the resource
-inventory.
+Renderer implementation. Implements the keleustēs interface. Renders manifests
+from source content using helm, kustomize, or raw YAML.
 
 [katastroma/orpheus](https://github.com/katastroma/orpheus)
 
+## Katartismos
+
+Provisioner interface. gRPC proto defining the contract for applying manifests
+to a cluster and pruning resources no longer in the rendered output.
+
+[katastroma/katartismos](https://github.com/katastroma/katartismos)
+
 ## Histia
 
-Katastroma's reference provisioner. Implements the katartismos interface.
-Applies resources directly to the Kubernetes API using server-side apply. No
-external dependencies, no running services — just the cluster.
+Provisioner implementation. Implements the katartismos interface. Applies
+manifests to the cluster using server-side apply with Kubernetes impersonation.
+Prunes resources by label.
 
 [katastroma/histia](https://github.com/katastroma/histia)
 
+## Deployment
+
+The platform is deployed as Helm charts via
+[phortion](https://github.com/katastroma/phortion):
+
+- **Epibathra** — tenant management stack (grammateus, prora, gatekeeper,
+  auth/IdP)
+- **Prymna** — GitOps engine (pharos, phortizo, orpheus, histia)
+
 ## Swappability
 
-The adapter is a separate deployment, selected by configuration. Swap the image,
-swap the backend:
-
-- The native adapter (orpheus + histia) for a self-contained stack
-- An ArgoCD adapter that delegates to a running ArgoCD instance
-- Any custom adapter that implements the zeugma gRPC contract
-
-The interfaces are the product. The implementations are reference points.
+Each service implements a gRPC interface. Swap the implementation by deploying a
+different image. The interfaces are the contracts — the implementations are
+reference points.
