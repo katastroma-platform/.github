@@ -6,12 +6,13 @@ admission control.
 
 ## Architecture
 
-GitOps has three operations:
+GitOps has four operations:
 
 1. **Fetch** — given a repo URL, revision, path, and credentials, retrieve the
    source
 2. **Render** — given source content, produce Kubernetes manifests
-3. **Provision** — given manifests, apply them to the cluster
+3. **Order** — given unordered manifests, sort them into a safe apply order
+4. **Provision** — given ordered manifests, apply them to the cluster
 
 Each operation is a separate service with its own interface, implementation, and
 deployment. A webhook server orchestrates the pipeline.
@@ -19,8 +20,8 @@ deployment. A webhook server orchestrates the pipeline.
 ### The Pipeline
 
 Git push → [pharos](#pharos) receives webhook → [phortizo](#phortizo) fetches
-source → [orpheus](#orpheus) renders manifests → [histia](#histia) provisions to
-cluster via impersonation.
+source → [orpheus](#orpheus) renders manifests → orderer sorts manifests →
+[histia](#histia) provisions to cluster via impersonation.
 
 ### Components
 
@@ -33,6 +34,8 @@ cluster via impersonation.
 | [phortizo](#phortizo)       | Retriever implementation             |
 | [keleustēs](#keleustēs)     | Renderer interface (gRPC proto)      |
 | [orpheus](#orpheus)         | Renderer implementation              |
+| TBD                         | Orderer interface (gRPC proto)       |
+| TBD                         | Orderer implementation               |
 | [katartismos](#katartismos) | Provisioner interface (gRPC proto)   |
 | [histia](#histia)           | Provisioner implementation           |
 
@@ -87,6 +90,22 @@ Renderer implementation. Implements the keleustēs interface. Renders manifests
 from source content using helm, kustomize, or raw YAML.
 
 [katastroma/orpheus](https://github.com/katastroma/orpheus)
+
+## Orderer (TBD)
+
+Ordering is a distinct pipeline stage between rendering and provisioning.
+Different render backends produce manifests in different orders — Helm sorts by
+its hardcoded `InstallOrder`, Kustomize's SDK returns accumulation order by
+default, and raw YAML has no ordering at all. The Kubernetes API applies one
+resource at a time, and apply order matters: a Namespace must exist before
+resources can be created in it, CRDs must exist before custom resources, RBAC
+before workloads that depend on service accounts, etc.
+
+The orderer service accepts manifests from the renderer and ensures they are in
+a safe apply order. A per-source ordering strategy could be explored in the
+future.
+
+Interface and implementation repo names TBD.
 
 ## Katartismos
 
