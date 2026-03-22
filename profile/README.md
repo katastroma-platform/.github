@@ -39,7 +39,7 @@ drives the downstream pipeline.
 | [grammateus](https://github.com/katastroma/grammateus)   | Tenant management API server                |
 | [prora](https://github.com/katastroma/prora)             | Tenant self-service frontend                |
 | [pharos](https://github.com/katastroma/pharos)           | Shared pipeline library for naukleros impls |
-| [naukleros](https://github.com/katastroma/naukleros)     | Retriever interface (gRPC proto)            |
+| [naukleros](https://github.com/katastroma/naukleros)     | Shared source event and identity types      |
 | [phortizo](https://github.com/katastroma/phortizo)       | Retriever implementation (git)              |
 | [keleustēs](https://github.com/katastroma/keleustes)     | Renderer interface (gRPC proto)             |
 | [orpheus](https://github.com/katastroma/orpheus)         | Renderer implementation                     |
