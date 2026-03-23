@@ -41,26 +41,11 @@ GitOps has 5 operations:
 | [phortizo](https://github.com/katastroma/phortizo)       | GitHub Source Event Listener |
 | [keleustēs](https://github.com/katastroma/keleustes)     | Renderer interface           |
 | [orpheus](https://github.com/katastroma/orpheus)         | Renderer implementation      |
-| diataxis                                                 | Orderer interface            |
-| stolarches                                               | Orderer implementation       |
+| [diataxis](https://github.com/katastroma/diataxis)       | Orderer interface            |
+| [stolarches](https://github.com/katastroma/stolarches)   | Orderer implementation       |
 | [katartismos](https://github.com/katastroma/katartismos) | Provisioner interface        |
 | [histia](https://github.com/katastroma/histia)           | Provisioner implementation   |
 
-### Orderer (TBD)
-
-Ordering is a distinct pipeline stage between rendering and provisioning.
-Different render backends produce manifests in different orders — Helm sorts by
-its hardcoded `InstallOrder`, Kustomize's SDK returns accumulation order by
-default, and raw YAML has no ordering at all. The Kubernetes API applies one
-resource at a time, and apply order matters: a Namespace must exist before
-resources can be created in it, CRDs must exist before custom resources, RBAC
-before workloads that depend on service accounts, etc.
-
-The orderer service accepts manifests from the renderer and ensures they are in
-a safe apply order. A per-source ordering strategy/config could be explored in
-the future.
-
-Interface and implementation repo names TBD.
 
 ## Deployment
 
