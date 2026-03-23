@@ -69,8 +69,8 @@ The platform is deployed as Helm charts via
 
 - **Epibathra** — tenant management stack (tenant API server, tenant API
   frontend, gatekeeper, auth/IdP)
-- **Prymna** — source event handler stack (source retriever, renderer, orderer,
-  and provisioner implementations)
+- **Prymna** — source event handler stack (source handler APIs, renderers,
+  orderers, and provisioners)
 
 ## Multi-Cluster
 
