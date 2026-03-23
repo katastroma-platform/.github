@@ -6,47 +6,45 @@ admission control.
 
 ## Architecture
 
-GitOps has four operations:
+GitOps has 5 operations:
 
-1. **Fetch** — given a source identity, retrieve the source content
-2. **Render** — given source content, produce Kubernetes manifests
-3. **Order** — given unordered manifests, sort them into a safe apply order
-4. **Provision** — given ordered manifests, apply them to the cluster
-
-Each operation is a separate service with its own interface, implementation, and
-deployment. Each naukleros implementation is a standalone service that receives
-source events, matches them against registered identities, fetches source, and
-drives the downstream pipeline.
+1. **Listen** - wait for events
+   - Multiple event-listeners running in the system - each for different source
+     types (GitHub, OCI, S3, etc.)
+2. **Retrieve** — given source event, retrieve the source content
+3. **Render** — given source content, produce Kubernetes manifests
+4. **Order** — given unordered manifests, sort them into a safe apply order
+5. **Provision** — given ordered manifests, apply them to the cluster
 
 ## Event-Driven Pipeline
 
-1. Source event → the [naukleros](https://github.com/katastroma/naukleros)
-   implementation receives it
-2. Verifies the webhook signature through grammateus → gets tenant identity
-3. Matches the event against registered source identities — skips if no match
-4. Fetches the source
-5. Streams source to the [keleustēs](https://github.com/katastroma/keleustes)
-   implementation → renders manifests
-6. Streams manifests to the orderer implementation → orders manifests
-7. Streams ordered manifests to the
+1. Source event → a source handler receives it
+2. Source handler verifies the webhook signature to verify the tenant identity
+3. Source handler matches the event against registered tenant watch targets —
+   skips if no match
+4. Source handler retrieves the source
+5. Source handler notifies source is ready to be rendered by a
+   [keleustēs](https://github.com/katastroma/keleustes) implementation → renders
+   manifests
+6. Renderer notifies manifests are ready to be ordered by an orderer
+   implementation → orders manifests
+7. Orderer notifies ordered manifests are ready to be applied by a
    [katartismos](https://github.com/katastroma/katartismos) implementation →
-   applies to the cluster
+   applies ordered manifests to the cluster
 
 ## Components
 
-| Component                                                | Role                                        |
-| -------------------------------------------------------- | ------------------------------------------- |
-| [grammateus](https://github.com/katastroma/grammateus)   | Tenant management API server                |
-| [prora](https://github.com/katastroma/prora)             | Tenant self-service frontend                |
-| [pharos](https://github.com/katastroma/pharos)           | Shared pipeline library for naukleros impls |
-| [naukleros](https://github.com/katastroma/naukleros)     | Shared source event and identity types      |
-| [phortizo](https://github.com/katastroma/phortizo)       | Retriever implementation (git)              |
-| [keleustēs](https://github.com/katastroma/keleustes)     | Renderer interface (gRPC proto)             |
-| [orpheus](https://github.com/katastroma/orpheus)         | Renderer implementation                     |
-| TBD                                                      | Orderer interface (gRPC proto)              |
-| TBD                                                      | Orderer implementation                      |
-| [katartismos](https://github.com/katastroma/katartismos) | Provisioner interface (gRPC proto)          |
-| [histia](https://github.com/katastroma/histia)           | Provisioner implementation                  |
+| Component                                                | Role                         |
+| -------------------------------------------------------- | ---------------------------- |
+| [grammateus](https://github.com/katastroma/grammateus)   | Tenant management API server |
+| [prora](https://github.com/katastroma/prora)             | Tenant self-service frontend |
+| [phortizo](https://github.com/katastroma/phortizo)       | GitHub Source Event Listener |
+| [keleustēs](https://github.com/katastroma/keleustes)     | Renderer interface           |
+| [orpheus](https://github.com/katastroma/orpheus)         | Renderer implementation      |
+| diataxis                                                 | Orderer interface            |
+| stolarches                                               | Orderer implementation       |
+| [katartismos](https://github.com/katastroma/katartismos) | Provisioner interface        |
+| [histia](https://github.com/katastroma/histia)           | Provisioner implementation   |
 
 ### Orderer (TBD)
 
@@ -59,8 +57,8 @@ resources can be created in it, CRDs must exist before custom resources, RBAC
 before workloads that depend on service accounts, etc.
 
 The orderer service accepts manifests from the renderer and ensures they are in
-a safe apply order. A per-source ordering strategy could be explored in the
-future.
+a safe apply order. A per-source ordering strategy/config could be explored in
+the future.
 
 Interface and implementation repo names TBD.
 
@@ -69,15 +67,10 @@ Interface and implementation repo names TBD.
 The platform is deployed as Helm charts via
 [phortion](https://github.com/katastroma/phortion):
 
-- **Epibathra** — tenant management stack (grammateus, prora, gatekeeper,
-  auth/IdP)
-- **Prymna** — source event handler stack (naukleros, keleustes, orderer, and
-  katartismos implementations)
-
-## Swappability
-
-Each service implements a gRPC interface. Swap the implementation by deploying a
-different image.
+- **Epibathra** — tenant management stack (tenant API server, tenant API
+  frontend, gatekeeper, auth/IdP)
+- **Prymna** — source event handler stack (source retriever, renderer, orderer,
+  and provisioner implementations)
 
 ## Multi-Cluster
 
@@ -89,14 +82,14 @@ The architecture should support:
 - during tenant onboarding, tenant will provide what cluster the platform should
   install resources to and provide access to that cluster.
 
-This will likely require bringing up the source handler services (naukleros,
-keleustes, orderer, and katartismos implementations) to those clusters
+This will likely require bringing up the source handler services (including the
+renderer, orderer, and provisioner implementations) to those clusters
 beforehand(?). Otherwise tenant onboarding could possibly do it given sufficient
 access/permissions.
 
-Once those prerequisites are installed, provisioning to that cluster for a
-SourceIdentity is just a matter of passing the ClusterIdentity (cluster server
-and credentials) to histia for it to provision.
+Once those prerequisites are installed, provisioning to that cluster for a watch
+target is just a matter of passing a ClusterIdentity (cluster server and
+credentials) to the provisioner for it to provision.
 
 ## Multi-Tenancy
 
@@ -108,21 +101,20 @@ and credentials) to histia for it to provision.
    for the tenant
 3. Grammateus creates a deployer ServiceAccount in the tenant namespace with:
    - A ClusterRole granting `create`, `patch`, and `delete` on all resources
-     (`*`). `create` and `patch` for SSA, `delete` for pruning. No read verbs.
-   - A ClusterRoleBinding binding the SA to the ClusterRole.
-   - Gatekeeper constrains where the SA can operate by prefix.
-4. Grammateus generates a webhook secret and stores it in the tenant namespace.
-   Tenant configures source webhooks in their sources with this secret to send
-   events to the [naukleros](https://github.com/katastroma/naukleros)
-   implementation.
-5. Tenant registers gitops identities and repository credentials through
-   [phortizo](https://github.com/katastroma/phortizo).
+     (`*`) - `create` and `patch` for SSA, `delete` for pruning, _no `read`_ to
+     ensure isolation
+   - A ClusterRoleBinding binding the SA to the ClusterRole
+   - Gatekeeper constrains where the SA can operate by prefix
+4. Tenant configures the platform source handlers, watch targets, any necessary
+   credentials with the source handler APIs
+5. Tenant configures their sources with any verifications needed to wire up
+   sending events from their sources to the source handler APIs
 
-All resources grammateus creates — namespace, ServiceAccount, ClusterRole,
-ClusterRoleBinding, webhook secret — are labeled with the tenant identity.
-Resources phortizo creates (gitops identities, repo credentials) are also
-labeled with the tenant identity. This allows histia to find and prune all
-tenant resources (including cluster-scoped ones) during offboarding.
+All tenant resources — namespace, ServiceAccount, ClusterRole, and
+ClusterRoleBinding from grammateus, source credentials and webhook secrets from
+source handler APIs, etc. — are labeled with the tenant identity. This allows
+histia to find and prune all tenant resources (including cluster-scoped ones)
+during offboarding.
 
 ### Offboarding
 
@@ -237,11 +229,10 @@ enforcement.
 ### Example Enforcement Flow
 
 1. Grammateus onboards tenant ACME → creates tenant-acme namespace,
-   acme-deployer SA with ClusterRole, webhook secret. ACME registers source
-   identities and credentials through the source
-   [naukleros](https://github.com/katastroma/naukleros) implementation.
-   Gatekeeper's cluster-wide policy automatically enforces the acme-\* prefix.
-2. ACME triggers webhook through source modification → naukleros implementation
+   acme-deployer SA with ClusterRole. ACME registers watch targets and
+   credentials through the source handler APIs.
+   - Gatekeeper's cluster-wide policy automatically enforces the acme-\* prefix.
+2. ACME triggers webhook through source modification → source handler API
    receives event → pipeline runs → resources applied and labeled
 3. GLOBEX's deployer tries to create resources in acme-prod → Gatekeeper rejects
    (globex-deployer prefix doesn't match acme-\*)
@@ -252,7 +243,7 @@ enforcement.
 CLUSTER
   ├── platform namespace
   │   ├── grammateus (tenant API server)
-  │   ├── naukleros implementations (receive source events, fetch source)
+  │   ├── source handler APIs (receive source events, fetch source)
   │   ├── keleustes implementations (render manifests from source)
   │   ├── orderer implementations (order manifests for safe apply)
   │   ├── katartismos implementations (provision resources from manifests via impersonation)
@@ -268,21 +259,21 @@ CLUSTER
   │
   ├── tenant-acme namespace (root tenant)
   │   ├── ServiceAccount: acme-deployer (grammateus)
-  │   ├── Secret: webhook-secret (grammateus)
-  │   ├── ConfigMap: gitops-identity (phortizo)
-  │   └── Secret: repo-credentials (phortizo)
+  │   ├── Secret: webhook-secret (source handler API)
+  │   ├── ConfigMap: watch-target (source handler API)
+  │   └── Secret: repo-credentials (source handler API)
   │
   ├── tenant-acme-dev namespace (child, ownerRef → tenant-acme)
   │   ├── ServiceAccount: acme-dev-deployer (grammateus)
-  │   ├── Secret: webhook-secret (grammateus)
-  │   ├── ConfigMap: gitops-identity (phortizo)
-  │   └── Secret: repo-credentials (phortizo)
+  │   ├── Secret: webhook-secret (source handler API)
+  │   ├── ConfigMap: watch-target (source handler API)
+  │   └── Secret: repo-credentials (source handler API)
   │
   ├── tenant-globex namespace (root tenant)
   │   ├── ServiceAccount: globex-deployer (grammateus)
-  │   ├── Secret: webhook-secret (grammateus)
-  │   ├── ConfigMap: gitops-identity (phortizo)
-  │   └── Secret: repo-credentials (phortizo)
+  │   ├── Secret: webhook-secret (source handler API)
+  │   ├── ConfigMap: watch-target (source handler API)
+  │   └── Secret: repo-credentials (source handler API)
   │
   ├── acme-prod namespace (provisioned by histia from tenant manifests, impersonating acme-deployer)
   │   └── [acme's workload pods, services, etc.]
